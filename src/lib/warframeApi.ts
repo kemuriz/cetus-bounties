@@ -120,8 +120,14 @@ export function isGreenBounty(bountyName?: string): boolean {
   if (!bountyName) return false;
   const lower = bountyName.toLowerCase().trim();
 
-  // Cull The Enemy (T5) must always be red
-  if (lower.includes('cull the enemy') || lower.includes('cull')) return false;
+  // Cull The Enemy (T5) and Commander bounties must ALWAYS be RED
+  if (
+    lower.includes('cull the enemy') ||
+    lower.includes('cull') ||
+    lower.includes('commander')
+  ) {
+    return false;
+  }
 
   return (
     lower.includes('find the hidden artifact') ||
@@ -259,7 +265,7 @@ export function getTierCategoryDetails(levelMin: number, levelMax: number, typeN
   if (levelMin === 40 && levelMax === 60) {
     return { prefix: 'T5', name: typeName, badge: 'Tier 5', color: '#ec4899', tent: 'Tent C' };
   }
-  
+
   if (levelMax <= 30) {
     return { prefix: `T${index + 1}`, name: typeName, badge: `Lv ${levelMin}-${levelMax}`, color: '#10b981', tent: 'Tent A' };
   } else if (levelMax <= 50) {
@@ -359,14 +365,18 @@ export function getWikiIconUrl(itemName: string): string {
 const LOTUS_BOUNTY_NAME_MAP: Record<string, string> = {
   attritionbountylib: 'Weaken The Grineer Foothold',
   attritionbountycap: 'Capture Their Leader',
+  attritionbountysab: 'Sabotage Grineer Supply Lines',
+  attritionbountyext: 'Cull The Enemy',
   reclamationbountycache: 'Find The Hidden Artifact',
   reclamationbountytheft: 'Reclaim The Stolen Artifact',
+  reclamationbountycap: 'Capture The Grineer Agent',
   assassinatebountyass: 'Assassinate The Commander',
   assassinatebountycap: 'Capture The New Grineer Commander',
-  attritionbountysab: 'Sabotage Grineer Supply Lines',
   sabotagebountysab: 'Sabotage Grineer Supply Lines',
   capturebountycaptwo: 'Spy Catcher',
-  attritionbountyext: 'Cull The Enemy',
+  capturebountycapone: 'Capture the Grineer Commander',
+  capturebountycap: 'Capture The Grineer Agent',
+  capturebountyagent: 'Capture The Grineer Agent',
   rescuebountyresc: 'Search And Rescue',
   prototypesabotage: 'Prototype Sabotage',
 };
@@ -382,16 +392,31 @@ export function getBountyNameFromLotusPath(path: string, fallbackName?: string):
 
   // Keyword fallbacks
   if (lower.includes('rescue')) return 'Search And Rescue';
-  if (lower.includes('reclamation') && lower.includes('cache')) return 'Find The Hidden Artifact';
-  if (lower.includes('reclamation') || lower.includes('theft')) return 'Reclaim The Stolen Artifact';
-  if (lower.includes('assassinate') && lower.includes('ass')) return 'Assassinate The Commander';
-  if (lower.includes('assassinate') || (lower.includes('capture') && lower.includes('commander'))) return 'Capture The New Grineer Commander';
-  if (lower.includes('capture') && lower.includes('agent')) return 'Capture The Grineer Agent';
+  if (lower.includes('reclamation')) {
+    if (lower.includes('cache')) return 'Find The Hidden Artifact';
+    if (lower.includes('cap')) return 'Capture The Grineer Agent';
+    if (lower.includes('theft')) return 'Reclaim The Stolen Artifact';
+    return 'Reclaim The Stolen Artifact';
+  }
+  if (lower.includes('assassinate')) {
+    if (lower.includes('ass')) return 'Assassinate The Commander';
+    if (lower.includes('cap')) return 'Capture The New Grineer Commander';
+    return 'Assassinate The Commander';
+  }
+  if (lower.includes('capture')) {
+    if (lower.includes('commander')) return 'Capture the Grineer Commander';
+    if (lower.includes('capone')) return 'Capture the Grineer Commander';
+    if (lower.includes('agent')) return 'Capture The Grineer Agent';
+    if (lower.includes('captwo') || lower.includes('spy')) return 'Spy Catcher';
+    return 'Capture The Grineer Agent';
+  }
   if (lower.includes('sabotage') || lower.includes('sab')) return 'Sabotage Grineer Supply Lines';
-  if (lower.includes('attrition') && lower.includes('lib')) return 'Weaken The Grineer Foothold';
-  if (lower.includes('attrition') && lower.includes('cap')) return 'Capture Their Leader';
-  if (lower.includes('attrition') && lower.includes('ext')) return 'Cull The Enemy';
-  if (lower.includes('spy') || lower.includes('captwo')) return 'Spy Catcher';
+  if (lower.includes('attrition')) {
+    if (lower.includes('lib')) return 'Weaken The Grineer Foothold';
+    if (lower.includes('cap')) return 'Capture Their Leader';
+    if (lower.includes('ext')) return 'Cull The Enemy';
+    if (lower.includes('sab')) return 'Sabotage Grineer Supply Lines';
+  }
 
   return fallbackName || filename;
 }
@@ -402,7 +427,7 @@ const BOUNTY_NAME_MAP_EN: Record<string, string> = {
   'reclaim the stolen artifact': 'Reclaim The Stolen Artifact',
   'capture the grineer agent': 'Capture The Grineer Agent',
   'capture the new grineer commander': 'Capture The New Grineer Commander',
-  'capture the grineer commander': 'Capture The New Grineer Commander',
+  'capture the grineer commander': 'Capture the Grineer Commander',
   'assassinate the commander': 'Assassinate The Commander',
   'sabotage grineer supply lines': 'Sabotage Grineer Supply Lines',
   'sabotage bounty': 'Sabotage Grineer Supply Lines',
