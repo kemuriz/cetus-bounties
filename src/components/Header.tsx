@@ -3,7 +3,7 @@
 import React from 'react';
 import { RotationType } from '@/lib/warframeApi';
 import { useSettings } from '@/context/SettingsContext';
-import { Sun, Moon, Globe } from 'lucide-react';
+import { Sun, Moon } from 'lucide-react';
 
 interface HeaderProps {
   onRefresh?: () => void;
@@ -17,7 +17,7 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({
   activeRotation,
 }) => {
-  const { language, setLanguage, theme, setTheme, t } = useSettings();
+  const { theme, setTheme, t } = useSettings();
 
   return (
     <header className="w-full border-b border-[var(--border-color)] bg-[var(--bg-header)] px-4 py-3.5 transition-colors">
@@ -40,31 +40,6 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Action Controls */}
         <div className="flex items-center gap-2 sm:gap-3">
-          {/* Language Toggle */}
-          <div className="flex items-center bg-[var(--bg-subcard)] p-0.5 border border-[var(--border-color)] text-xs font-bold">
-            <button
-              onClick={() => setLanguage('es')}
-              className={`px-2.5 py-1 transition-colors flex items-center gap-1 ${
-                language === 'es'
-                  ? 'bg-[var(--button-hover)] text-[var(--text-main)] font-extrabold shadow border border-[var(--border-hover)]'
-                  : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'
-              }`}
-            >
-              <Globe className="w-3.5 h-3.5" />
-              ES
-            </button>
-            <button
-              onClick={() => setLanguage('en')}
-              className={`px-2.5 py-1 transition-colors flex items-center gap-1 ${
-                language === 'en'
-                  ? 'bg-[var(--button-hover)] text-[var(--text-main)] font-extrabold shadow border border-[var(--border-hover)]'
-                  : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'
-              }`}
-            >
-              EN
-            </button>
-          </div>
-
           {/* Theme Toggle */}
           <button
             onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}

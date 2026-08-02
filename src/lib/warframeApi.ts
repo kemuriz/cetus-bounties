@@ -86,30 +86,84 @@ export function isAyaFastBounty(bountyName: string): boolean {
   return isGreenBounty(bountyName);
 }
 
+export interface LocationBountiesData {
+  expiry?: number;
+  CetusSyndicate?: {
+    TentA?: string[];
+    TentB?: string[];
+    TentC?: string[];
+  };
+}
+
+/**
+ * Fetch Full Warframe PC Worldstate from https://api.warframestat.us/pc and https://oracle.browse.wf/location-bounties
+ */
+export async function fetchWarframeWorldstate(): Promise<{
+  cetusCycle: CetusCycle;
+  ostronData: OstronSyndicateData;
+  locationData: LocationBountiesData | null;
+}> {
+  try {
+    const [wfRes, oracleRes] = await Promise.all([
+      fetch('https://api.warframestat.us/pc', { cache: 'no-store' }),
+      fetch('https://oracle.browse.wf/location-bounties', { cache: 'no-store' }).catch(() => null),
+    ]);
+
+    if (!wfRes.ok) throw new Error('Error al obtener datos de WarframeStat PC');
+    const data = await wfRes.json();
+    const locationData: LocationBountiesData | null = oracleRes && oracleRes.ok ? await oracleRes.json() : null;
+
+    const cetusCycle: CetusCycle = data.cetusCycle || {
+      id: 'cetusCycle',
+      expiry: new Date(Date.now() + 1500000).toISOString(),
+      activation: new Date().toISOString(),
+      isDay: true,
+      state: 'day',
+      timeLeft: '25m 00s',
+      isCetus: true,
+      shortString: '25m to Night',
+    };
+
+    const ostronData: OstronSyndicateData | undefined = (data.syndicateMissions || []).find(
+      (s: { syndicate: string }) => s.syndicate === 'Ostrons'
+    );
+
+    if (!ostronData) {
+      throw new Error('No se encontraron contratos de Ostron en WarframeStat PC');
+    }
+
+    return { cetusCycle, ostronData, locationData };
+  } catch (err) {
+    console.error('Error in fetchWarframeWorldstate:', err);
+    throw err;
+  }
+}
+
 /**
  * Fetch Cetus Day/Night Cycle
  */
 export async function fetchCetusCycle(): Promise<CetusCycle> {
-  const res = await fetch('https://api.warframestat.us/pc/cetusCycle', {
-    cache: 'no-store',
-  });
-  if (!res.ok) throw new Error('Error al obtener ciclo de Cetus');
-  return res.json();
+  const { cetusCycle } = await fetchWarframeWorldstate();
+  return cetusCycle;
 }
 
 /**
  * Fetch Ostron Syndicate Missions / Bounties
  */
 export async function fetchOstronBounties(): Promise<OstronSyndicateData> {
-  const res = await fetch('https://api.warframestat.us/pc/syndicateMissions', {
-    cache: 'no-store',
-  });
-  if (!res.ok) throw new Error('Error al obtener contratos de Konzu');
-  const data = await res.json();
-  const ostron = data.find((s: { syndicate: string }) => s.syndicate === 'Ostrons');
-  if (!ostron) throw new Error('No se encontraron contratos de Ostron/Konzu');
-  return ostron;
+  const { ostronData } = await fetchWarframeWorldstate();
+  return ostronData;
 }
+
+/**
+ * Fetch Live Field Location Bounties (Tent A, B, C)
+ */
+export async function fetchLocationBounties(): Promise<LocationBountiesData | null> {
+  const { locationData } = await fetchWarframeWorldstate();
+  return locationData;
+}
+
+
 
 /**
  * Dummy export for drop tables compatibility
@@ -135,10 +189,11 @@ export function getTierCategoryDetails(levelMin: number, levelMax: number, typeN
   color: string;
   tent: 'Tent A' | 'Tent B' | 'Tent C';
 } {
-  if (typeName.includes('Narmer')) {
+  const lowerName = (typeName || '').toLowerCase();
+  if (lowerName.includes('narmer')) {
     return { prefix: 'T7', name: typeName, badge: 'Narmer', color: '#ef4444', tent: 'Tent C' };
   }
-  if (levelMin === 100) {
+  if (levelMin === 100 || levelMax === 100) {
     return { prefix: 'T6', name: typeName, badge: 'Steel Path', color: '#f59e0b', tent: 'Tent C' };
   }
   if (levelMin === 5 && levelMax === 15) {
@@ -156,7 +211,14 @@ export function getTierCategoryDetails(levelMin: number, levelMax: number, typeN
   if (levelMin === 40 && levelMax === 60) {
     return { prefix: 'T5', name: typeName, badge: 'Tier 5', color: '#ec4899', tent: 'Tent C' };
   }
-  return { prefix: `T${index + 1}`, name: typeName, badge: `Lv ${levelMin}-${levelMax}`, color: '#6b7280', tent: 'Tent A' };
+  
+  if (levelMax <= 30) {
+    return { prefix: `T${index + 1}`, name: typeName, badge: `Lv ${levelMin}-${levelMax}`, color: '#10b981', tent: 'Tent A' };
+  } else if (levelMax <= 50) {
+    return { prefix: `T${index + 1}`, name: typeName, badge: `Lv ${levelMin}-${levelMax}`, color: '#3b82f6', tent: 'Tent B' };
+  } else {
+    return { prefix: `T${index + 1}`, name: typeName, badge: `Lv ${levelMin}-${levelMax}`, color: '#ec4899', tent: 'Tent C' };
+  }
 }
 
 /**
@@ -246,124 +308,29 @@ export function getWikiIconUrl(itemName: string): string {
   return `https://wiki.warframe.com/w/Special:FilePath/${encodeURIComponent(camelFormatted)}.png`;
 }
 
-/**
- * Spanish Translation Dictionaries for Cetus Bounties & Rewards
- */
-const BOUNTY_TRANSLATIONS_ES: Record<string, string> = {
-  'find the hidden artifact': 'Encontrar el artefacto oculto',
-  'search and rescue': 'Búsqueda y rescate',
-  'capture the grineer agent': 'Capturar al agente Grineer',
-  'prototype sabotage': 'Sabotaje de prototipo',
-  'sabotage grineer supply lines': 'Sabotaje de suministros Grineer',
-  'capture the grineer commander': 'Capturar al comandante Grineer',
-  'reclaim the stolen artifact': 'Recuperar el artefacto robado',
-  'cull the enemy': 'Limpieza de enemigos',
-  'weaken the grineer foothold': 'Debilitar el bastión Grineer',
-  'sabotage supply lines': 'Sabotaje de suministros',
-  'capture the new grineer commander': 'Capturar al nuevo comandante Grineer',
-  'for the unum (narmer)': 'Por el Unum (Narmer)',
-  'rise and fall (narmer)': 'Ascenso y caída (Narmer)',
+const BOUNTY_NAME_MAP_EN: Record<string, string> = {
+  'search and rescue': 'Search And Rescue',
+  'find the hidden artifact': 'Find The Hidden Artifact',
+  'reclaim the stolen artifact': 'Reclaim The Stolen Artifact',
+  'capture the grineer agent': 'Capture The Grineer Agent',
+  'assassinate the commander': 'Assassinate The Commander',
+  'sabotage grineer supply lines': 'Sabotage Grineer Supply Lines',
+  'sabotage bounty': 'Sabotage Grineer Supply Lines',
+  'spy catcher': 'Spy Catcher',
+  'weaken the grineer foothold': 'Weaken The Grineer Foothold',
+  'cull the enemy': 'Cull The Enemy',
+  'prototype sabotage': 'Prototype Sabotage',
+  'capture their leader': 'Capture Their Leader',
 };
 
-const ITEM_TRANSLATIONS_ES: Record<string, string> = {
-  'aya': 'Aya',
-  'endo': 'Endo',
-  'credits': 'Créditos',
-  'credit cache': 'Reserva de créditos',
-  'gara neuroptics blueprint': 'Plano de Neurópticas de Gara',
-  'gara chassis blueprint': 'Plano de Chasis de Gara',
-  'gara systems blueprint': 'Plano de Sistemas de Gara',
-  'gara blueprint': 'Plano de Gara',
-  'revenant neuroptics blueprint': 'Plano de Neurópticas de Revenant',
-  'revenant chassis blueprint': 'Plano de Chasis de Revenant',
-  'revenant systems blueprint': 'Plano de Sistemas de Revenant',
-  'revenant blueprint': 'Plano de Revenant',
-  'caliban neuroptics blueprint': 'Plano de Neurópticas de Caliban',
-  'caliban chassis blueprint': 'Plano de Chasis de Caliban',
-  'caliban systems blueprint': 'Plano de Sistemas de Caliban',
-  'furax wraith gauntlet': 'Guantelete de Furax Wraith',
-  'furax wraith blueprint': 'Plano de Furax Wraith',
-  'narmer isoplast': 'Isoplasto Narmer',
-  'breath of the eidolon': 'Aliento de Eidolon',
-  'cetus wisp': 'Duende de Cetus',
-  'eidolon lens blueprint': 'Plano de Lente Eidolon',
-  'ostron lens blueprint': 'Plano de Lente Ostron',
-  'naramon lens': 'Lente Naramon',
-  'zenurik lens': 'Lente Zenurik',
-  'vazarin lens': 'Lente Vazarin',
-  'unairu lens': 'Lente Unairu',
-  'madurai lens': 'Lente Madurai',
-  'kuva': 'Kuva',
-  'oxium': 'Oxio',
-  'iradite': 'Iradita',
-  'grokdrul': 'Grokdrul',
-  'morphics': 'Mórficos',
-  'control module': 'Módulo de control',
-  'lith relic': 'Reliquia Lith',
-  'meso relic': 'Reliquia Meso',
-  'neo relic': 'Reliquia Neo',
-  'axi relic': 'Reliquia Axi',
-  'augur secrets': 'Secretos del Augur',
-  'augur reach': 'Alcance del Augur',
-  'augur message': 'Mensaje del Augur',
-  'augur accord': 'Acuerdo del Augur',
-  'augur seekers': 'Buscadores del Augur',
-  'augur pact': 'Pacto del Augur',
-  'gladiator vice': 'Vicio de Gladiador',
-  'gladiator might': 'Poder de Gladiador',
-  'gladiator aegis': 'Égida de Gladiador',
-  'gladiator finesse': 'Finura de Gladiador',
-  'gladiator rush': 'Impulso de Gladiador',
-  'gladiator resolve': 'Resolución de Gladiador',
-  'vigilante pursuit': 'Persecución de Vigilante',
-  'vigilante offense': 'Ofensiva de Vigilante',
-  'vigilante armaments': 'Armamento de Vigilante',
-  'vigilante supplies': 'Suministros de Vigilante',
-  'vigilante vigor': 'Vigor de Vigilante',
-  'hunter synergy': 'Sinergia de Cazador',
-  'hunter recovery': 'Recuperación de Cazador',
-  'hunter command': 'Mando de Cazador',
-  'hunter adrenaline': 'Adrenalina de Cazador',
-  'hunter track': 'Rastreo de Cazador',
-  'hunter munitions': 'Munición de Cazador',
-};
-
-export function translateBountyName(name: string, lang: 'es' | 'en'): string {
-  if (lang !== 'es' || !name) return name;
+export function translateBountyName(name: string, _lang?: string): string {
+  if (!name) return '';
   const lower = name.toLowerCase().trim();
-  return BOUNTY_TRANSLATIONS_ES[lower] || name;
+  return BOUNTY_NAME_MAP_EN[lower] || name;
 }
 
-export function translateItemName(itemName: string, lang: 'es' | 'en'): string {
-  if (lang !== 'es' || !itemName) return itemName;
-  
-  const countMatch = itemName.match(/^(\d+[\d,]*|[\d,]+[xX]?)\s+(.*)$/i);
-  let prefix = '';
-  let cleanName = itemName.trim();
-  if (countMatch) {
-    prefix = countMatch[1] + ' ';
-    cleanName = countMatch[2].trim();
-  }
-
-  const lower = cleanName.toLowerCase();
-  
-  if (BOUNTY_TRANSLATIONS_ES[lower]) {
-    return prefix + BOUNTY_TRANSLATIONS_ES[lower];
-  }
-  if (ITEM_TRANSLATIONS_ES[lower]) {
-    return prefix + ITEM_TRANSLATIONS_ES[lower];
-  }
-
-  let translated = cleanName
-    .replace(/Relic\s+([A-Z0-9]+)/i, 'Reliquia $1')
-    .replace(/Blueprint/i, 'Plano')
-    .replace(/Neuroptics/i, 'Neurópticas')
-    .replace(/Chassis/i, 'Chasis')
-    .replace(/Systems/i, 'Sistemas')
-    .replace(/Gauntlet/i, 'Guantelete')
-    .replace(/Lens/i, 'Lente');
-
-  return prefix + translated;
+export function translateItemName(itemName: string, _lang?: string): string {
+  return itemName || '';
 }
 
 

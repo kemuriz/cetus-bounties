@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import {
   BountyJob,
+  LocationBountiesData,
   RotationType,
   isGreenBounty,
   getTierCategoryDetails,
@@ -14,22 +15,25 @@ import { useSettings } from '@/context/SettingsContext';
 
 interface CetusBountiesViewProps {
   jobs: BountyJob[];
+  locationData?: LocationBountiesData | null;
   activeRotation: RotationType;
 }
 
 interface BountyItem {
   id: string;
   rawLabel: string;
+  prefix?: string;
   levels: string;
   isGreen: boolean;
   rewardPoolDrops: BountyJob['rewardPoolDrops'];
 }
 
 export const CetusBountiesView: React.FC<CetusBountiesViewProps> = ({
-  jobs,
+  jobs = [],
+  locationData,
   activeRotation,
 }) => {
-  const { language, t } = useSettings();
+  const { t } = useSettings();
   const [expandedRewards, setExpandedRewards] = useState<Record<string, boolean>>({});
   const [showAllGlobal, setShowAllGlobal] = useState<boolean>(false);
 
@@ -45,104 +49,134 @@ export const CetusBountiesView: React.FC<CetusBountiesViewProps> = ({
     setShowAllGlobal(nextVal);
     const newMap: Record<string, boolean> = {};
     if (nextVal) {
-      jobs.forEach((j, idx) => (newMap[`konzu_${j.id || 'job'}_${idx}`] = true));
-      ['ta_1', 'ta_2', 'ta_3', 'tb_1', 'tb_2', 'tb_3', 'tc_1', 'tc_2', 'tc_3'].forEach(
+      (jobs || []).forEach((j, idx) => (newMap[`konzu_${j?.id || 'job'}_${idx}`] = true));
+      ['ta_0', 'ta_1', 'ta_2', 'tb_0', 'tb_1', 'tb_2', 'tc_0', 'tc_1', 'tc_2'].forEach(
         (id) => (newMap[id] = true)
       );
     }
     setExpandedRewards(newMap);
   };
 
-  // Build Konzu List
-  const konzuList: BountyItem[] = jobs.map((job, idx) => {
-    const cat = getTierCategoryDetails(job.enemyLevels[0], job.enemyLevels[1], job.type, idx);
-    const isGreen = isGreenBounty(job.type);
+  // Safe helper to construct a BountyItem from a live job
+  const getSafeJobItem = (job: BountyJob, idx: number, keyPrefix = 'bounty'): BountyItem | null => {
+    if (!job || !Array.isArray(job.enemyLevels) || job.enemyLevels.length < 2) {
+      return null;
+    }
+    const minLvl = job.enemyLevels[0];
+    const maxLvl = job.enemyLevels[1];
+    const cat = getTierCategoryDetails(minLvl, maxLvl, job.type || '', idx);
+    const isGreen = isGreenBounty(job.type || '');
     return {
-      id: `konzu_${job.id || 'job'}_${idx}`,
-      rawLabel: job.type,
-      levels: `${t.level} ${job.enemyLevels[0]}-${job.enemyLevels[1]}`,
+      id: `${keyPrefix}_${job.id || 'job'}_${idx}`,
+      rawLabel: job.type || '',
+      prefix: cat.prefix,
+      levels: `${t.level} ${minLvl}-${maxLvl}`,
       isGreen,
       rewardPoolDrops: job.rewardPoolDrops || [],
     };
-  });
+  };
 
-  // Tent Lists with levels
-  const tentAList: BountyItem[] = [
-    {
-      id: 'ta_1',
-      rawLabel: 'Capture The Grineer Agent',
+  // 1. Konzu List: All live jobs from warframestat.us (T1 through Steel Path & Narmer)
+  const konzuList: BountyItem[] = (jobs || [])
+    .map((job, idx) => getSafeJobItem(job, idx, 'konzu'))
+    .filter((item): item is BountyItem => item !== null);
+
+  // Filter out Narmer jobs for standard field tent consoles
+  const standardJobs = (jobs || []).filter(
+    (job) => !(job?.type || '').toLowerCase().includes('narmer')
+  );
+
+  // Hybrid Determination: Match Oracle Lotus Keys to warframestat.us Live Jobs
+  const resolveTentItemFromLotusPath = (
+    lotusPath: string,
+    fallbackIdx: number,
+    tentKeyPrefix: string
+  ): BountyItem => {
+    const key = lotusPath.split('/').pop() || lotusPath;
+    const cleanKeyNoNumbers = key.replace(/\d+$/, '');
+
+    // Step 1: Direct ID Prefix Match with warframestat.us job.id
+    let matchedJob = standardJobs.find(
+      (j) => j.id.startsWith(cleanKeyNoNumbers) || cleanKeyNoNumbers.startsWith(j.id.replace(/\d+$/, ''))
+    );
+
+    // Step 2: Keyword Match with warframestat.us job.type
+    if (!matchedJob) {
+      const lowerKey = key.toLowerCase();
+      if (lowerKey.includes('sabotage')) {
+        matchedJob = standardJobs.find((j) => (j.type || '').toLowerCase().includes('sabotage'));
+      } else if (lowerKey.includes('rescue')) {
+        matchedJob = standardJobs.find((j) => (j.type || '').toLowerCase().includes('rescue'));
+      } else if (lowerKey.includes('assassinate')) {
+        matchedJob = standardJobs.find(
+          (j) => (j.type || '').toLowerCase().includes('assassinate') || (j.type || '').toLowerCase().includes('leader')
+        );
+      } else if (lowerKey.includes('capture') || lowerKey.includes('reclamation') || lowerKey.includes('attrition')) {
+        matchedJob = standardJobs.find(
+          (j) => (j.type || '').toLowerCase().includes('capture') || (j.type || '').toLowerCase().includes('agent') || (j.type || '').toLowerCase().includes('leader')
+        );
+      }
+    }
+
+    // Step 3: Tier Position Fallback
+    if (!matchedJob) {
+      matchedJob = standardJobs[fallbackIdx % standardJobs.length] || standardJobs[0] || jobs[0];
+    }
+
+    const item = getSafeJobItem(matchedJob, fallbackIdx, `${tentKeyPrefix}_${key}`);
+    if (item) return item;
+
+    return {
+      id: `${tentKeyPrefix}_${fallbackIdx}`,
+      rawLabel: matchedJob?.type || 'Cetus Bounty',
+      prefix: `T${fallbackIdx + 1}`,
       levels: `${t.level} 10-30`,
-      isGreen: isGreenBounty('Capture The Grineer Agent'),
-      rewardPoolDrops: jobs[1]?.rewardPoolDrops || [],
-    },
-    {
-      id: 'ta_2',
-      rawLabel: 'Sabotage Grineer Supply Lines',
-      levels: `${t.level} 10-30`,
-      isGreen: isGreenBounty('Sabotage Grineer Supply Lines'),
-      rewardPoolDrops: jobs[2]?.rewardPoolDrops || [],
-    },
-    {
-      id: 'ta_3',
-      rawLabel: 'Prototype Sabotage',
-      levels: `${t.level} 5-15`,
-      isGreen: isGreenBounty('Prototype Sabotage'),
-      rewardPoolDrops: jobs[0]?.rewardPoolDrops || [],
-    },
-  ];
+      isGreen: isGreenBounty(matchedJob?.type || ''),
+      rewardPoolDrops: matchedJob?.rewardPoolDrops || [],
+    };
+  };
 
-  const tentBList: BountyItem[] = [
-    {
-      id: 'tb_1',
-      rawLabel: 'Find The Hidden Artifact',
-      levels: `${t.level} 20-40`,
-      isGreen: isGreenBounty('Find The Hidden Artifact'),
-      rewardPoolDrops: jobs[4]?.rewardPoolDrops || [],
-    },
-    {
-      id: 'tb_2',
-      rawLabel: 'Search And Rescue',
-      levels: `${t.level} 30-50`,
-      isGreen: isGreenBounty('Search And Rescue'),
-      rewardPoolDrops: jobs[3]?.rewardPoolDrops || [],
-    },
-    {
-      id: 'tb_3',
-      rawLabel: 'Capture The Grineer Commander',
-      levels: `${t.level} 30-50`,
-      isGreen: isGreenBounty('Capture The Grineer Commander'),
-      rewardPoolDrops: jobs[5]?.rewardPoolDrops || [],
-    },
-  ];
+  const mapTentList = (
+    paths: string[] | undefined,
+    tentKeyPrefix: string,
+    defaultIndices: number[]
+  ): BountyItem[] => {
+    if (paths && Array.isArray(paths) && paths.length > 0) {
+      return paths.map((path, idx) =>
+        resolveTentItemFromLotusPath(path, defaultIndices[idx] ?? idx, tentKeyPrefix)
+      );
+    }
 
-  const tentCList: BountyItem[] = [
-    {
-      id: 'tc_1',
-      rawLabel: 'Find The Hidden Artifact',
-      levels: `${t.level} 40-60`,
-      isGreen: isGreenBounty('Find The Hidden Artifact'),
-      rewardPoolDrops: jobs[4]?.rewardPoolDrops || [],
-    },
-    {
-      id: 'tc_2',
-      rawLabel: 'Search And Rescue',
-      levels: `${t.level} 40-60`,
-      isGreen: isGreenBounty('Search And Rescue'),
-      rewardPoolDrops: jobs[3]?.rewardPoolDrops || [],
-    },
-    {
-      id: 'tc_3',
-      rawLabel: 'Cull The Enemy',
-      levels: `${t.level} 40-60`,
-      isGreen: isGreenBounty('Cull The Enemy'),
-      rewardPoolDrops: jobs[2]?.rewardPoolDrops || [],
-    },
-  ];
+    // Default Fallback indices if locationData is absent
+    return defaultIndices.map((jobIdx, slotIdx) => {
+      const job = standardJobs[jobIdx] || standardJobs[0] || jobs[0];
+      const item = getSafeJobItem(job, jobIdx, tentKeyPrefix);
+      if (item) return item;
 
-  const renderItemRow = (item: BountyItem, prefixLabel?: string) => {
+      return {
+        id: `${tentKeyPrefix}_${slotIdx}`,
+        rawLabel: job?.type || 'Cetus Bounty',
+        prefix: `T${jobIdx + 1}`,
+        levels: `${t.level} 10-30`,
+        isGreen: isGreenBounty(job?.type || ''),
+        rewardPoolDrops: job?.rewardPoolDrops || [],
+      };
+    });
+  };
+
+  // Tent A (Low Level Outpost): T1 (idx 0), T2 (idx 1), T3 (idx 2)
+  const tentAList = mapTentList(locationData?.CetusSyndicate?.TentA, 'ta', [0, 1, 2]);
+
+  // Tent B (Mid Level Outpost): T2 (idx 1), T3 (idx 2), T4 (idx 3)
+  const tentBList = mapTentList(locationData?.CetusSyndicate?.TentB, 'tb', [1, 2, 3]);
+
+  // Tent C (High Level Outpost): T3 (idx 2), T4 (idx 3), T5 (idx 4)
+  const tentCList = mapTentList(locationData?.CetusSyndicate?.TentC, 'tc', [2, 3, 4]);
+
+  const renderItemRow = (item: BountyItem) => {
     const isExpanded = expandedRewards[item.id] || showAllGlobal;
-    const translatedName = translateBountyName(item.rawLabel, language);
-    const displayTitle = prefixLabel ? `${prefixLabel} ${translatedName}` : translatedName;
+    const translatedName = translateBountyName(item.rawLabel);
+    const displayTitle = item.prefix ? `${item.prefix} ${translatedName}` : translatedName;
 
     return (
       <div
@@ -168,7 +202,7 @@ export const CetusBountiesView: React.FC<CetusBountiesViewProps> = ({
               {item.levels}
             </span>
 
-            {/* Only Aya Icon, no text */}
+            {/* Only Aya Icon */}
             {item.isGreen && (
               <img
                 src="https://wiki.warframe.com/w/Special:FilePath/Aya.png"
@@ -191,7 +225,7 @@ export const CetusBountiesView: React.FC<CetusBountiesViewProps> = ({
               <div className="grid grid-cols-1 gap-1.5 max-h-48 overflow-y-auto pr-1">
                 {item.rewardPoolDrops.map((drop, idx) => {
                   const iconUrl = getWikiIconUrl(drop.item);
-                  const translatedDropItem = translateItemName(drop.item, language);
+                  const translatedDropItem = translateItemName(drop.item);
                   return (
                     <div
                       key={idx}
@@ -262,10 +296,7 @@ export const CetusBountiesView: React.FC<CetusBountiesViewProps> = ({
             {t.konzuBounties}
           </h3>
           <div className="flex flex-col gap-2">
-            {konzuList.map((item, idx) => {
-              const cat = getTierCategoryDetails(jobs[idx]?.enemyLevels[0] || 0, jobs[idx]?.enemyLevels[1] || 0, item.rawLabel, idx);
-              return renderItemRow(item, cat.prefix);
-            })}
+            {konzuList.map((item) => renderItemRow(item))}
           </div>
         </div>
 

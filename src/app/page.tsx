@@ -4,21 +4,21 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   CetusCycle,
   OstronSyndicateData,
+  LocationBountiesData,
   RotationType,
-  fetchCetusCycle,
-  fetchOstronBounties,
+  fetchWarframeWorldstate,
   getRotationFromUniqueName,
 } from '@/lib/warframeApi';
-
+import { useSettings, SettingsProvider } from '@/context/SettingsContext';
 import { Header } from '@/components/Header';
 import { CycleTimerCard } from '@/components/CycleTimerCard';
 import { CetusBountiesView } from '@/components/CetusBountiesView';
-import { SettingsProvider, useSettings } from '@/context/SettingsContext';
 
 function MainApp() {
   const { theme, t } = useSettings();
   const [cycle, setCycle] = useState<CetusCycle | null>(null);
   const [bountiesData, setBountiesData] = useState<OstronSyndicateData | null>(null);
+  const [locationData, setLocationData] = useState<LocationBountiesData | null>(null);
   const [activeRotation, setActiveRotation] = useState<RotationType>('A');
 
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
@@ -31,13 +31,11 @@ function MainApp() {
     setError(null);
 
     try {
-      const [cycleData, ostronData] = await Promise.all([
-        fetchCetusCycle(),
-        fetchOstronBounties(),
-      ]);
+      const { cetusCycle: cycleData, ostronData, locationData: locData } = await fetchWarframeWorldstate();
 
       setCycle(cycleData);
       setBountiesData(ostronData);
+      setLocationData(locData);
 
       const firstJob = ostronData.jobs?.[0];
       const currentRot = getRotationFromUniqueName(firstJob?.uniqueName);
@@ -105,6 +103,7 @@ function MainApp() {
 
           <CetusBountiesView
             jobs={bountiesData?.jobs || []}
+            locationData={locationData}
             activeRotation={activeRotation}
           />
         </main>
