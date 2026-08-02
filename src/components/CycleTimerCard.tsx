@@ -18,28 +18,46 @@ export const CycleTimerCard: React.FC<CycleTimerCardProps> = ({
   onTimerExpired,
 }) => {
   const { t } = useSettings();
-  const [timeLeftSec, setTimeLeftSec] = useState<number>(0);
-  const targetExpiry = bountyExpiry || cycle?.expiry;
+  const [bountyTimeLeftSec, setBountyTimeLeftSec] = useState<number>(0);
+  const [cycleTimeLeftSec, setCycleTimeLeftSec] = useState<number>(0);
 
+  // 1. Bounty Reset Timer
   useEffect(() => {
-    if (!targetExpiry) return;
+    if (!bountyExpiry) return;
 
-    const calculateLeft = () => {
-      const expiryTime = new Date(targetExpiry).getTime();
-      const now = new Date().getTime();
+    const updateBountyTimer = () => {
+      const expiryTime = new Date(bountyExpiry).getTime();
+      const now = Date.now();
       const diff = Math.max(0, Math.floor((expiryTime - now) / 1000));
-
       if (diff === 0) {
         onTimerExpired();
       }
-
-      setTimeLeftSec(diff);
+      setBountyTimeLeftSec(diff);
     };
 
-    calculateLeft();
-    const timer = setInterval(calculateLeft, 1000);
+    updateBountyTimer();
+    const timer = setInterval(updateBountyTimer, 1000);
     return () => clearInterval(timer);
-  }, [targetExpiry, onTimerExpired]);
+  }, [bountyExpiry, onTimerExpired]);
+
+  // 2. Cetus Day / Night Cycle Timer
+  useEffect(() => {
+    if (!cycle?.expiry) return;
+
+    const updateCycleTimer = () => {
+      const expiryTime = new Date(cycle.expiry).getTime();
+      const now = Date.now();
+      const diff = Math.max(0, Math.floor((expiryTime - now) / 1000));
+      if (diff === 0) {
+        onTimerExpired();
+      }
+      setCycleTimeLeftSec(diff);
+    };
+
+    updateCycleTimer();
+    const timer = setInterval(updateCycleTimer, 1000);
+    return () => clearInterval(timer);
+  }, [cycle?.expiry, onTimerExpired]);
 
   const formatTime = (seconds: number) => {
     const hrs = Math.floor(seconds / 3600);
@@ -55,27 +73,47 @@ export const CycleTimerCard: React.FC<CycleTimerCardProps> = ({
     return `${paddedMins}m ${paddedSecs}s`;
   };
 
+  const isDay = cycle?.isDay ?? true;
+
   return (
     <div className="clean-panel p-3.5 sm:p-4 flex flex-wrap items-center justify-between text-sm gap-3">
-      {/* Cetus Day/Night Status */}
-      <div className="flex items-center gap-2.5 text-[var(--text-main)]">
-        {cycle?.isDay ? (
-          <Sun className="w-5 h-5 text-[var(--text-main)]" />
+      {/* Cetus Day/Night Status & Phase Timer */}
+      <div className="flex items-center gap-2.5 flex-wrap text-[var(--text-main)]">
+        {isDay ? (
+          <Sun className="w-5 h-5 text-amber-400" />
         ) : (
-          <Moon className="w-5 h-5 text-[var(--text-main)]" />
+          <Moon className="w-5 h-5 text-indigo-400" />
         )}
         <span className="font-bold text-sm sm:text-base">{t.cetusStatus}</span>
-        <span className="text-sm font-extrabold bg-[var(--bg-subcard)] px-3 py-1 border border-[var(--border-color)]">
-          {cycle?.isDay ? t.day : t.night}
+        <span
+          className={`text-xs sm:text-sm font-extrabold px-3 py-1 border border-[var(--border-color)] ${
+            isDay
+              ? 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+              : 'bg-indigo-500/10 text-indigo-400 border-indigo-500/30'
+          }`}
+        >
+          {isDay ? t.day : t.night}
         </span>
+
+        {/* Dynamic Day/Night Phase Timer */}
+        {cycle?.expiry && (
+          <div className="flex items-center gap-1.5 ml-1">
+            <span className="text-xs text-[var(--text-muted)] font-medium">
+              {isDay ? (t.nightIn || 'Night in:') : (t.dayIn || 'Day in:')}
+            </span>
+            <span className="font-mono text-xs sm:text-sm font-extrabold bg-[var(--bg-subcard)] px-2.5 py-1 border border-[var(--border-color)]">
+              {formatTime(cycleTimeLeftSec)}
+            </span>
+          </div>
+        )}
       </div>
 
-      {/* Bounty Timer Countdown */}
+      {/* Bounty Expiry Timer */}
       <div className="flex items-center gap-2.5 text-[var(--text-main)]">
         <Clock className="w-5 h-5 text-emerald-400" />
         <span className="font-bold text-sm sm:text-base">{t.resetIn}</span>
         <span className="font-mono text-emerald-400 text-sm sm:text-base font-extrabold bg-[var(--bg-subcard)] px-3 py-1 border border-[var(--border-color)] shadow-sm">
-          {formatTime(timeLeftSec)}
+          {formatTime(bountyTimeLeftSec)}
         </span>
       </div>
     </div>

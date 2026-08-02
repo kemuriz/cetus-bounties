@@ -14,6 +14,8 @@ export const translations = {
     cetusStatus: 'Cetus Status:',
     day: 'Day',
     night: 'Night',
+    nightIn: 'Night in:',
+    dayIn: 'Day in:',
     resetIn: 'Bounty Reset:',
     konzuTitle: 'Active Cetus Bounties (Konzu)',
     showRewards: 'Show Rewards',

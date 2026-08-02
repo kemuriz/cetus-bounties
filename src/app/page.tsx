@@ -107,6 +107,32 @@ function MainApp() {
             activeRotation={activeRotation}
           />
         </main>
+
+        <footer className="w-full max-w-[1600px] mx-auto px-4 py-4 border-t border-[var(--border-color)] flex flex-wrap items-center justify-between text-[11px] text-[var(--text-muted)] gap-2 opacity-50 hover:opacity-90 transition-opacity">
+          <div>
+            Data sourced in real-time from{' '}
+            <a
+              href="https://warframestat.us"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline hover:text-[var(--text-main)] transition-colors"
+            >
+              WarframeStat API
+            </a>{' '}
+            &{' '}
+            <a
+              href="https://oracle.browse.wf"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline hover:text-[var(--text-main)] transition-colors"
+            >
+              browse.wf
+            </a>
+          </div>
+          <div>
+            Warframe is a registered trademark of Digital Extremes Ltd.
+          </div>
+        </footer>
       </div>
     </div>
   );
