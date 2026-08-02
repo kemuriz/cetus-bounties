@@ -372,7 +372,7 @@ const LOTUS_BOUNTY_NAME_MAP: Record<string, string> = {
   reclamationbountycap: 'Capture The Grineer Agent',
   assassinatebountyass: 'Assassinate The Commander',
   assassinatebountycap: 'Capture The New Grineer Commander',
-  sabotagebountysab: 'Sabotage Grineer Supply Lines',
+  sabotagebountysab: 'Prototype Sabotage',
   capturebountycaptwo: 'Spy Catcher',
   capturebountycapone: 'Capture the Grineer Commander',
   capturebountycap: 'Capture The Grineer Agent',
@@ -410,7 +410,11 @@ export function getBountyNameFromLotusPath(path: string, fallbackName?: string):
     if (lower.includes('captwo') || lower.includes('spy')) return 'Spy Catcher';
     return 'Capture The Grineer Agent';
   }
-  if (lower.includes('sabotage') || lower.includes('sab')) return 'Sabotage Grineer Supply Lines';
+  if (lower.includes('sabotage') || lower.includes('sab')) {
+    if (lower.includes('sabotagebounty') || lower.includes('prototype')) return 'Prototype Sabotage';
+    if (lower.includes('attrition')) return 'Sabotage Grineer Supply Lines';
+    return 'Prototype Sabotage';
+  }
   if (lower.includes('attrition')) {
     if (lower.includes('lib')) return 'Weaken The Grineer Foothold';
     if (lower.includes('cap')) return 'Capture Their Leader';
