@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Warframe Cetus Bounties - Contratos y Rotaciones A, B, C en Tiempo Real",
-  description: "Consulta en tiempo real los contratos de Konzu en Cetus, el ciclo Día/Noche de las Llanuras de Eidolon y las rotaciones A, B y C con sus probabilidades de recompensas.",
+  title: "Warframe Cetus Bounties",
+  description: "Consulta en tiempo real los contratos de Konzu y carpas de Cetus, el ciclo Día/Noche y las rotaciones A, B y C con su marca verde (óptimos) y rojo (estándar).",
 };
 
 export default function RootLayout({

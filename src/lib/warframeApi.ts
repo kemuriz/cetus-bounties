@@ -28,6 +28,54 @@ export interface BountyJob {
   timeBound?: string;
 }
 
+export interface StageGroup {
+  stageName: string;
+  drops: BountyDrop[];
+}
+
+export function groupRewardPoolDropsByStage(drops: BountyDrop[]): StageGroup[] {
+  if (!drops || drops.length === 0) return [];
+
+  const rawGroups: BountyDrop[][] = [];
+  let currentGroup: BountyDrop[] = [];
+  let currentSum = 0;
+
+  for (const drop of drops) {
+    currentGroup.push(drop);
+    currentSum += drop.chance;
+    if (currentSum >= 99.5) {
+      rawGroups.push(currentGroup);
+      currentGroup = [];
+      currentSum = 0;
+    }
+  }
+  if (currentGroup.length > 0) {
+    rawGroups.push(currentGroup);
+  }
+
+  const totalGroups = rawGroups.length;
+  return rawGroups.map((groupDrops, idx) => {
+    let stageName = `Stage ${idx + 1}`;
+    if (totalGroups === 4) {
+      if (idx === 0) stageName = 'Stage 1';
+      else if (idx === 1) stageName = 'Stage 2 & 3';
+      else if (idx === 2) stageName = 'Stage 4';
+      else if (idx === 3) stageName = 'Final Stage';
+    } else if (totalGroups === 3) {
+      if (idx === 0) stageName = 'Stage 1';
+      else if (idx === 1) stageName = 'Stage 2 & 3';
+      else if (idx === 2) stageName = 'Final Stage';
+    } else if (totalGroups === 2) {
+      if (idx === 0) stageName = 'Stage 1';
+      else if (idx === 1) stageName = 'Final Stage';
+    }
+    return {
+      stageName,
+      drops: groupDrops,
+    };
+  });
+}
+
 export interface OstronSyndicateData {
   id: string;
   syndicate: string;
@@ -308,11 +356,53 @@ export function getWikiIconUrl(itemName: string): string {
   return `https://wiki.warframe.com/w/Special:FilePath/${encodeURIComponent(camelFormatted)}.png`;
 }
 
+const LOTUS_BOUNTY_NAME_MAP: Record<string, string> = {
+  attritionbountylib: 'Weaken The Grineer Foothold',
+  attritionbountycap: 'Capture Their Leader',
+  reclamationbountycache: 'Find The Hidden Artifact',
+  reclamationbountytheft: 'Reclaim The Stolen Artifact',
+  assassinatebountyass: 'Assassinate The Commander',
+  assassinatebountycap: 'Capture The New Grineer Commander',
+  attritionbountysab: 'Sabotage Grineer Supply Lines',
+  sabotagebountysab: 'Sabotage Grineer Supply Lines',
+  capturebountycaptwo: 'Spy Catcher',
+  attritionbountyext: 'Cull The Enemy',
+  rescuebountyresc: 'Search And Rescue',
+  prototypesabotage: 'Prototype Sabotage',
+};
+
+export function getBountyNameFromLotusPath(path: string, fallbackName?: string): string {
+  if (!path) return fallbackName || 'Cetus Bounty';
+  const filename = path.split('/').pop() || path;
+  const lower = filename.toLowerCase().replace(/\d+$/, '').trim();
+
+  if (LOTUS_BOUNTY_NAME_MAP[lower]) {
+    return LOTUS_BOUNTY_NAME_MAP[lower];
+  }
+
+  // Keyword fallbacks
+  if (lower.includes('rescue')) return 'Search And Rescue';
+  if (lower.includes('reclamation') && lower.includes('cache')) return 'Find The Hidden Artifact';
+  if (lower.includes('reclamation') || lower.includes('theft')) return 'Reclaim The Stolen Artifact';
+  if (lower.includes('assassinate') && lower.includes('ass')) return 'Assassinate The Commander';
+  if (lower.includes('assassinate') || (lower.includes('capture') && lower.includes('commander'))) return 'Capture The New Grineer Commander';
+  if (lower.includes('capture') && lower.includes('agent')) return 'Capture The Grineer Agent';
+  if (lower.includes('sabotage') || lower.includes('sab')) return 'Sabotage Grineer Supply Lines';
+  if (lower.includes('attrition') && lower.includes('lib')) return 'Weaken The Grineer Foothold';
+  if (lower.includes('attrition') && lower.includes('cap')) return 'Capture Their Leader';
+  if (lower.includes('attrition') && lower.includes('ext')) return 'Cull The Enemy';
+  if (lower.includes('spy') || lower.includes('captwo')) return 'Spy Catcher';
+
+  return fallbackName || filename;
+}
+
 const BOUNTY_NAME_MAP_EN: Record<string, string> = {
   'search and rescue': 'Search And Rescue',
   'find the hidden artifact': 'Find The Hidden Artifact',
   'reclaim the stolen artifact': 'Reclaim The Stolen Artifact',
   'capture the grineer agent': 'Capture The Grineer Agent',
+  'capture the new grineer commander': 'Capture The New Grineer Commander',
+  'capture the grineer commander': 'Capture The New Grineer Commander',
   'assassinate the commander': 'Assassinate The Commander',
   'sabotage grineer supply lines': 'Sabotage Grineer Supply Lines',
   'sabotage bounty': 'Sabotage Grineer Supply Lines',
@@ -332,5 +422,6 @@ export function translateBountyName(name: string, _lang?: string): string {
 export function translateItemName(itemName: string, _lang?: string): string {
   return itemName || '';
 }
+
 
 

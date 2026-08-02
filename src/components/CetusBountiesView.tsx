@@ -8,6 +8,8 @@ import {
   isGreenBounty,
   getTierCategoryDetails,
   getWikiIconUrl,
+  getBountyNameFromLotusPath,
+  groupRewardPoolDropsByStage,
   translateBountyName,
   translateItemName,
 } from '@/lib/warframeApi';
@@ -86,97 +88,49 @@ export const CetusBountiesView: React.FC<CetusBountiesViewProps> = ({
     (job) => !(job?.type || '').toLowerCase().includes('narmer')
   );
 
-  // Hybrid Determination: Match Oracle Lotus Keys to warframestat.us Live Jobs
-  const resolveTentItemFromLotusPath = (
-    lotusPath: string,
-    fallbackIdx: number,
-    tentKeyPrefix: string
-  ): BountyItem => {
-    const key = lotusPath.split('/').pop() || lotusPath;
-    const cleanKeyNoNumbers = key.replace(/\d+$/, '');
-
-    // Step 1: Direct ID Prefix Match with warframestat.us job.id
-    let matchedJob = standardJobs.find(
-      (j) => j.id.startsWith(cleanKeyNoNumbers) || cleanKeyNoNumbers.startsWith(j.id.replace(/\d+$/, ''))
-    );
-
-    // Step 2: Keyword Match with warframestat.us job.type
-    if (!matchedJob) {
-      const lowerKey = key.toLowerCase();
-      if (lowerKey.includes('sabotage')) {
-        matchedJob = standardJobs.find((j) => (j.type || '').toLowerCase().includes('sabotage'));
-      } else if (lowerKey.includes('rescue')) {
-        matchedJob = standardJobs.find((j) => (j.type || '').toLowerCase().includes('rescue'));
-      } else if (lowerKey.includes('assassinate')) {
-        matchedJob = standardJobs.find(
-          (j) => (j.type || '').toLowerCase().includes('assassinate') || (j.type || '').toLowerCase().includes('leader')
-        );
-      } else if (lowerKey.includes('capture') || lowerKey.includes('reclamation') || lowerKey.includes('attrition')) {
-        matchedJob = standardJobs.find(
-          (j) => (j.type || '').toLowerCase().includes('capture') || (j.type || '').toLowerCase().includes('agent') || (j.type || '').toLowerCase().includes('leader')
-        );
-      }
-    }
-
-    // Step 3: Tier Position Fallback
-    if (!matchedJob) {
-      matchedJob = standardJobs[fallbackIdx % standardJobs.length] || standardJobs[0] || jobs[0];
-    }
-
-    const item = getSafeJobItem(matchedJob, fallbackIdx, `${tentKeyPrefix}_${key}`);
-    if (item) return item;
-
-    return {
-      id: `${tentKeyPrefix}_${fallbackIdx}`,
-      rawLabel: matchedJob?.type || 'Cetus Bounty',
-      prefix: `T${fallbackIdx + 1}`,
-      levels: `${t.level} 10-30`,
-      isGreen: isGreenBounty(matchedJob?.type || ''),
-      rewardPoolDrops: matchedJob?.rewardPoolDrops || [],
-    };
-  };
-
+  // Map each Tent's 3 slots directly from Oracle Lotus paths + Tier indices
   const mapTentList = (
     paths: string[] | undefined,
     tentKeyPrefix: string,
-    defaultIndices: number[]
+    tierIndices: number[]
   ): BountyItem[] => {
-    if (paths && Array.isArray(paths) && paths.length > 0) {
-      return paths.map((path, idx) =>
-        resolveTentItemFromLotusPath(path, defaultIndices[idx] ?? idx, tentKeyPrefix)
-      );
-    }
+    return tierIndices.map((jobTierIdx, slotIdx) => {
+      const matchedJob = standardJobs[jobTierIdx] || standardJobs[0] || jobs[0];
+      const minLvl = matchedJob?.enemyLevels?.[0] ?? (jobTierIdx + 1) * 10;
+      const maxLvl = matchedJob?.enemyLevels?.[1] ?? (jobTierIdx + 1) * 10 + 20;
 
-    // Default Fallback indices if locationData is absent
-    return defaultIndices.map((jobIdx, slotIdx) => {
-      const job = standardJobs[jobIdx] || standardJobs[0] || jobs[0];
-      const item = getSafeJobItem(job, jobIdx, tentKeyPrefix);
-      if (item) return item;
+      const lotusPath = paths && Array.isArray(paths) ? paths[slotIdx] : undefined;
+      const rawLabel = lotusPath
+        ? getBountyNameFromLotusPath(lotusPath, matchedJob?.type)
+        : matchedJob?.type || 'Cetus Bounty';
+
+      const isGreen = isGreenBounty(rawLabel);
 
       return {
-        id: `${tentKeyPrefix}_${slotIdx}`,
-        rawLabel: job?.type || 'Cetus Bounty',
-        prefix: `T${jobIdx + 1}`,
-        levels: `${t.level} 10-30`,
-        isGreen: isGreenBounty(job?.type || ''),
-        rewardPoolDrops: job?.rewardPoolDrops || [],
+        id: `${tentKeyPrefix}_${slotIdx}_${lotusPath ? lotusPath.split('/').pop() : jobTierIdx}`,
+        rawLabel,
+        prefix: `T${jobTierIdx + 1}`,
+        levels: `${t.level} ${minLvl}-${maxLvl}`,
+        isGreen,
+        rewardPoolDrops: matchedJob?.rewardPoolDrops || [],
       };
     });
   };
 
-  // Tent A (Low Level Outpost): T1 (idx 0), T2 (idx 1), T3 (idx 2)
+  // Tent A (Low Level Outpost): T1 (jobTierIdx 0), T2 (jobTierIdx 1), T3 (jobTierIdx 2)
   const tentAList = mapTentList(locationData?.CetusSyndicate?.TentA, 'ta', [0, 1, 2]);
 
-  // Tent B (Mid Level Outpost): T2 (idx 1), T3 (idx 2), T4 (idx 3)
+  // Tent B (Mid Level Outpost): T2 (jobTierIdx 1), T3 (jobTierIdx 2), T4 (jobTierIdx 3)
   const tentBList = mapTentList(locationData?.CetusSyndicate?.TentB, 'tb', [1, 2, 3]);
 
-  // Tent C (High Level Outpost): T3 (idx 2), T4 (idx 3), T5 (idx 4)
+  // Tent C (High Level Outpost): T3 (jobTierIdx 2), T4 (jobTierIdx 3), T5 (jobTierIdx 4)
   const tentCList = mapTentList(locationData?.CetusSyndicate?.TentC, 'tc', [2, 3, 4]);
 
   const renderItemRow = (item: BountyItem) => {
     const isExpanded = expandedRewards[item.id] || showAllGlobal;
     const translatedName = translateBountyName(item.rawLabel);
     const displayTitle = item.prefix ? `${item.prefix} ${translatedName}` : translatedName;
+    const groupedStages = groupRewardPoolDropsByStage(item.rewardPoolDrops || []);
 
     return (
       <div
@@ -217,39 +171,48 @@ export const CetusBountiesView: React.FC<CetusBountiesViewProps> = ({
 
         {/* Collapsible Rewards */}
         {isExpanded && (
-          <div className="pt-2 border-t border-[var(--border-color)] text-xs">
-            <div className="text-xs text-[var(--text-muted)] mb-1.5 font-bold flex items-center gap-1">
+          <div className="pt-2 border-t border-[var(--border-color)] text-xs flex flex-col gap-2">
+            <div className="text-xs text-[var(--text-muted)] font-bold flex items-center gap-1">
               {t.rewards} ({t.rotation} {activeRotation}):
             </div>
-            {item.rewardPoolDrops && item.rewardPoolDrops.length > 0 ? (
-              <div className="grid grid-cols-1 gap-1.5 max-h-48 overflow-y-auto pr-1">
-                {item.rewardPoolDrops.map((drop, idx) => {
-                  const iconUrl = getWikiIconUrl(drop.item);
-                  const translatedDropItem = translateItemName(drop.item);
-                  return (
-                    <div
-                      key={idx}
-                      className="flex items-center justify-between px-2 py-1 bg-[var(--bg-subcard)] border border-[var(--border-color)] text-xs sm:text-sm"
-                    >
-                      <div className="flex items-center gap-2 min-w-0 max-w-[75%]">
-                        {iconUrl && (
-                          <img
-                            src={iconUrl}
-                            alt={drop.item}
-                            className="w-4 h-4 object-contain flex-shrink-0"
-                            onError={(e) => (e.currentTarget.style.display = 'none')}
-                          />
-                        )}
-                        <span className="text-[var(--text-main)] truncate font-medium">
-                          {translatedDropItem} {drop.count && drop.count > 1 ? `x${drop.count}` : ''}
-                        </span>
-                      </div>
-                      <span className="font-mono text-emerald-400 font-bold">
-                        {drop.chance}%
-                      </span>
+            {groupedStages.length > 0 ? (
+              <div className="flex flex-col gap-2.5 max-h-64 overflow-y-auto pr-1">
+                {groupedStages.map((stage, stageIdx) => (
+                  <div key={stageIdx} className="flex flex-col gap-1">
+                    <div className="text-[11px] font-extrabold uppercase tracking-wider text-[var(--text-muted)] bg-[var(--bg-subcard)] px-2 py-0.5 border border-[var(--border-color)] w-fit">
+                      {stage.stageName}
                     </div>
-                  );
-                })}
+                    <div className="grid grid-cols-1 gap-1">
+                      {stage.drops.map((drop, dropIdx) => {
+                        const iconUrl = getWikiIconUrl(drop.item);
+                        const translatedDropItem = translateItemName(drop.item);
+                        return (
+                          <div
+                            key={dropIdx}
+                            className="flex items-center justify-between px-2 py-1 bg-[var(--bg-subcard)] border border-[var(--border-color)] text-xs"
+                          >
+                            <div className="flex items-center gap-2 min-w-0 max-w-[75%]">
+                              {iconUrl && (
+                                <img
+                                  src={iconUrl}
+                                  alt={drop.item}
+                                  className="w-4 h-4 object-contain flex-shrink-0"
+                                  onError={(e) => (e.currentTarget.style.display = 'none')}
+                                />
+                              )}
+                              <span className="text-[var(--text-main)] truncate font-medium">
+                                {translatedDropItem} {drop.count && drop.count > 1 ? `x${drop.count}` : ''}
+                              </span>
+                            </div>
+                            <span className="font-mono text-emerald-400 font-bold">
+                              {drop.chance}%
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : (
               <div className="text-xs text-[var(--text-muted)] italic">
