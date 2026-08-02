@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Warframe Cetus Bounties",
-  description: "",
+  description: "Warframe Cetus Bounties",
 };
 
 export default function RootLayout({
